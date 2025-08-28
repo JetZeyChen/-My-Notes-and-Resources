@@ -334,21 +334,71 @@
 
 #### 更新发送对象
 
-​	
+​	CPU可以使用IF1和IF2接口寄存器组再任何时间发送镀锡的数据字节；再更新之前，MsgVal 和 TxRqst两者都不需要被复位。
+
+​	即使只有一部分数据字节需要更新，对应的IF1/IF2的数据A寄存器或者数据B寄存器中的四个字节再发送到消息对象之前都应该有效。再CPU写新数据字节之前，要么CPU必须通过IF1/IF2数据寄存器写全部的四个字节，要么消息对象被传输的到IF1/IF2数据寄存器。
+
+​	当只有数据字节被更新时，IF命令寄存器的[23:16]位域先被写位0x87，然后IF命令寄存器的[7:0]的位域被消息对象的序号填充，更新数据字节和用NewdDat设定TxRqst，是并行的。
+
+​	**为了避免在已经进行的传输结尾TxRqst复位同时数据被更新，在事件驱动CAN通信中NewDat必须和TxRqst同时置位。**
 
 #### 变更发送对象
 
+​	如果使用的消息对象数量不满足被用来当作永久消息对象，发送对象可以被动态管理。CPU可以写整个消息（包括ID，DLC，DATA）到接口寄存器。**在传输整个消息对象的内容到消息对象之前，IF命令寄存器的[23:16]位域应被设置位0xB7**。在这个操作之前MsgVal 和 TsRqst都不需要复位。
+
+​	如果先前请求传输的消息对象已在进行但没有完成，传输将会继续；然而，如果传输被干扰了不会重发。
+
+​	**只更新被发送消息的数据字节，需要设置IF命令寄存器[23:16]位域位0x87**。
+
+>注：在更新发送对象之后，接口寄存器组保留实际对象内容的副本，包括没有被更新的部分。
+
 #### 接收消息的接受过滤
+
+​	当一个输入消息的仲裁和控制位（ID+IDE+RTR+DLC）完全移位到CAN核心的移位寄存器时，消息处理器开始去扫描消息RAM寻找一个匹配的有效消息对象：
+
+* 接收滤波器加载来自CAN核心移位寄存器的仲裁位（ID+IDE+RTR）。
+* 然后消息对象1的仲裁位和掩码位被装在到接收滤波器中，并且被与来自移位寄存器的相关位进行比较。这将会重复进行直到一个匹配的消息对象被找到，或者到达了消息RAM的结尾。
+* 如果产生匹配，扫描就会停止并且消息处理器根据接收帧的类型进行处理。
 
 #### 数据帧的接收
 
+​	消息处理器存储来自CAN核心移位寄存器的消息到对应的消息RAM中的消息对象。不只是数据字节，全部的仲裁位和数据长度码都被存储到响应的消息对象。这确保了即使使用仲裁掩码寄存器，也会保持数据字节跟ID之间相关联。
+
+​	NewDat位置位表明新的数据已经被接收，CPU没有看过。当CPU读取消息对象时必须复位NewDat。如果在接收的同时NewDat已经置位，MsgLst置位表明先前的数据丢失。如果RxIE位置位，导致中断寄存器指向该消息对象，然后IntPnd位置位。
+
+​	复位消息对象的TxRqst位避免在请求的数据帧刚被接收的同时，发送一个远程帧。
+
 #### 远程帧的接收
+
+​	当远程帧被接受，匹配的消息对象考虑以下三种不同配置：
+
+1. Dir = 1（发送），RmtEn = 1， Umask = 1 or 0
+
+​	接收到匹配的远程帧后置位消息对象的TxRqst。消息对象的其余部分保持不变。
+
+1. Dir = 1，RmtEn = 0， Umask = 0
+
+​	远程帧被忽视，消息对象保持不变。
+
+1. Dir = 1，RmtEn = 0， Umask = 1
+
+   远程帧被当作类似的数据帧。在接收到匹配的远程帧时，消息对象的TxRqst位复位。将仲裁位域和控制位域从移位寄存器存储到消息RAM的消息对象中，并且消息对象的NewDat 置位。消息对象的数据字节保持不变。
 
 #### 读取接收消息
 
+​	CPU可以在任意时间通过IFx寄存器组去读取接收的消息，由消息处理状态机确保数据一致性。
 
+​	通常CPU写IFxCMD命令寄存器的[23:16]为0x7F和[7:0]写为消息对象序号。一并传输整个接收的消息从消息RAM到接口寄存器组。另外，消息RAM中的NewDat 和 IntPnd位被清除（非接口寄存器组）。在IFxMCTLR消息控制寄存器的这写位的值总是反应这些位重置之前的状态。
 
+​	如果消息对象使用掩码作接收过滤，被接受的匹配对象不一致的仲裁位将显示。
 
+​	NewDat的实际值表示是否在上一次读取消息对象之后有消息被接收。MsgLst的实际值表示是否在上一次读取消息对象之后有超过一个消息被接收。MsgLst不会自动复位。
+
+#### 为接收对象请求新数据
+
+​	通过远程帧的方式，CPU可以向其他CAN节点向接收对象请求提供新的数据。设置接收对象的TxRqst位会导致与接收对象ID一致的远程帧的传输。该远程帧触发其他CAN节点开始传输匹配的数据帧。如果在匹配的远程帧发送之前，匹配的数据帧已经接收，TxRqst位自动的复位。
+
+​	在不改变消息对象的内容的情况下设置TxRqst，需要IFxCMD命令寄存器的[23:16]位域值为0x84。
 
 ## CAN位时序
 
@@ -376,6 +426,437 @@
 
 # CAN 驱动开发
 
+## CAN GPIO配置
+
+​	以CAN的Tx与Rx引脚配置为例，分别C2000Ware提供的库函数，GPIO_setPinConfig(pinConfig);
+
+```  c
+void CANA_GPIO_Init(void) {
+  GPIO_setPinConfig(CANA_RX_PIN);
+//   GPIO_setPadConfig(CANA_RX, GPIO_PIN_TYPE_STD);
+//   GPIO_setQualificationMode(CANA_RX, GPIO_QUAL_ASYNC);
+
+  GPIO_setPinConfig(CANA_TX_PIN);
+//   GPIO_setPadConfig(CANA_TX, GPIO_PIN_TYPE_STD);
+//   GPIO_setQualificationMode(CANA_TX, GPIO_QUAL_ASYNC);
+}
+```
+
+​	**调用该函数则直接将该引脚连接到IO口并且配置为相应的功能**，如果GPIO_30_CANA_RX，则将30Pin设置为CANA_Rx的复用功能，其相较于ST库函数较为方便。
+
+## CAN Module配置
+
+### 初始化CAN
+
+ 	初始化CAN模块，C2000Ware提供的库函数中基本上都存在参数校对ASSERT()函数;（这对于开发来说是非常有帮助的，有助于避免一些不太注意到的错误产生）。
+
+```c
+void CAN_initModule(uint32_t base)
+{
+    ASSERT(CAN_isBaseValid(base));//参数核对
+
+    HWREGH(base + CAN_O_CTL) |= ((uint16_t)CAN_CTL_INIT |
+                                 (uint16_t)CAN_INIT_PARITY_DISABLE);//失能CAN校验和初始化CAN
+    CAN_initRAM(base);//初始化消息RAM
+
+    HWREGH(base + CAN_O_CTL) |=  CAN_CTL_SWR;//软件强制CAN复位
+    //
+    // Delay for 14 cycles
+    //
+    SysCtl_delay(1U);
+
+    HWREGH(base + CAN_O_CTL) |= CAN_CTL_CCE;//使能配置变更
+}
+```
+
+​	HWREGH()是定义在hw_types.h的头文件中的宏函数，其本质是*（volatile uint16_t *(x)）对寄存器地址低16位的访问。CAN控制寄存器CAN_CTL的上述使用相关位解释：
+
+* CAN_CTL_INIT：
+
+  * 1：无视CAN总线上的活动，用来保证CAN位时序和消息RAM的初始化，当掉线时也会由硬件自动置位；
+  * 0：正常进行CAN总线通信。
+
+* CAN_CTL_PMD：
+
+  * 0x5：校验失能；
+  * 其他值：使能。
+
+* CAN_CTL_SWR:
+
+  * 1：强制执行软件复位，在复位执行的一个时钟周期后自动复位；
+  * 0：无操作。
+
+  > 注：软件复位的执行操作是：1.置位Init，2.置位SWR（SWR是由Init写保护的）。使用SWR复位模块，不会丢失用户配置。
+
+* CAN_CTL_CCE：
+
+  * 1：当Init = 1时，CPU可以对配置寄存器进行写访问；
+  * 0：不可写访问配置寄存器
+
+### 配置CAN波特率
+
+​	由CAN_serBitRate()函数对CAN通信的波特率进行配置。该函数本质是通过时钟频率以及目标比特率和位时间片数量，推算出位时序配置参数。其会调用CAN_setBitTiming()函数，配置位时序。
+
+```c
+void CAN_setBitRate(uint32_t base, uint32_t clockFreq, uint32_t bitRate,uint16_t bitTime)
+{
+    uint16_t brp;
+    uint16_t tPhase;
+    uint16_t phaseSeg2;
+    uint16_t tSync = 1U;
+    uint16_t tProp = 2U;
+    uint16_t tSeg1;
+    uint16_t tSeg2;
+    uint16_t sjw;
+    uint16_t prescaler;
+    uint16_t prescalerExtension;
+
+    //
+    // Check the arguments.
+    //
+    ASSERT(CAN_isBaseValid(base));
+    ASSERT((bitTime > 7U) && (bitTime < 26U));
+    ASSERT(bitRate <= 1000000U);
+
+    //
+    // Calculate bit timing values
+    //
+    brp = (uint16_t)(clockFreq / (bitRate * bitTime));
+    tPhase = bitTime - (tSync + tProp);
+    if((tPhase / 2U) <= 8U)
+    {
+        phaseSeg2 = tPhase / 2U;
+    }
+    else
+    {
+        phaseSeg2 = 8U;
+    }
+    tSeg1 = ((tPhase - phaseSeg2) + tProp) - 1U;
+    tSeg2 = phaseSeg2 - 1U;
+    if(phaseSeg2 > 4U)
+    {
+        sjw = 3U;
+    }
+    else
+    {
+        sjw = tSeg2;
+    }
+    prescalerExtension = ((brp - 1U) / 64U);
+    prescaler = ((brp - 1U) % 64U);
+
+    //
+    // Set the calculated timing parameters
+    //
+    CAN_setBitTiming(base, prescaler, prescalerExtension, tSeg1, tSeg2, sjw);
+}
+```
+
+### 配置消息对象Message Objects
+
+​	配置消息对象是通过调用CAN_setupMessageObject()来实现的，其中包括8个参数：
+
+* CAN模块：CANA/CANB；
+* 消息对象序号：1~32，数字越小优先级越高；
+* 消息ID：消息的仲裁位；
+* 消息帧类型：数据帧/远程帧；
+* 消息对象类型：接收对象/发送对象/接收远程帧对象/发送远程帧对象；
+* 消息ID掩码：用于使多个ID匹配同个消息对象；
+* 消息中断标志：发送中断/接收中断；
+* 消息长度：对发送对象有效。
+
+``` c
+void CAN_setupMessageObject(uint32_t base, uint32_t objID, uint32_t msgID,
+                       CAN_MsgFrameType frame, CAN_MsgObjType msgType,
+                       uint32_t msgIDMask, uint32_t flags, uint16_t msgLen)
+{
+    uint32_t cmdMaskReg = 0U;
+    uint32_t maskReg = 0U;
+    uint32_t arbReg = 0U;
+    uint32_t msgCtrl = 0U;
+
+    ASSERT(CAN_isBaseValid(base));
+    ASSERT((objID <= 32U) && (objID > 0U));
+    ASSERT(msgLen <= 8U);
+
+    //等待命令寄存器完成上一次指令操作，进入空闲状态
+    while((HWREGH(base + CAN_O_IF1CMD) & CAN_IF1CMD_BUSY) == CAN_IF1CMD_BUSY)
+    {
+    }
+
+    switch(msgType)
+    {
+        case CAN_MSG_OBJ_TYPE_TX://消息接收对象
+        {
+            arbReg = CAN_IF1ARB_DIR;//设置ID中的Dir为1表示发送
+            break;
+        }
+
+        case CAN_MSG_OBJ_TYPE_RXTX_REMOTE://消息接收发送远程帧对象
+        {
+            arbReg = CAN_IF1ARB_DIR;
+            msgCtrl = (uint32_t)((uint32_t)CAN_IF1MCTL_RMTEN |
+                                 (uint32_t)CAN_IF1MCTL_UMASK);//启用自动发送匹配远程帧，使用ID掩码
+            break;
+        }
+
+        //
+        // Transmit remote request message object (CAN_MSG_OBJ_TYPE_TX_REMOTE)
+        // or Receive message object (CAN_MSG_OBJ_TYPE_RX).
+        //
+        default:
+        {
+           arbReg = 0U;
+           break;
+        }
+    }
+
+    if(frame == CAN_MSG_FRAME_EXT)//扩展帧
+    {
+        if((flags & CAN_MSG_OBJ_USE_ID_FILTER) == CAN_MSG_OBJ_USE_ID_FILTER)
+        {
+            maskReg = msgIDMask & CAN_IF1MSK_MSK_M;//使用ID掩码
+        }
+        arbReg |= (msgID & CAN_IF1ARB_ID_M) | CAN_IF1ARB_MSGVAL |
+                  CAN_IF1ARB_XTD;//设置ID，消息对象有效，且为扩展帧
+    }
+    else //标准帧
+    {
+        if((flags & CAN_MSG_OBJ_USE_ID_FILTER) == CAN_MSG_OBJ_USE_ID_FILTER)
+        {
+           maskReg = ((msgIDMask << CAN_IF1ARB_STD_ID_S) &
+                      CAN_IF1ARB_STD_ID_M);
+        }
+        arbReg |= ((msgID << CAN_IF1ARB_STD_ID_S) & CAN_IF1ARB_STD_ID_M) |
+                  CAN_IF1ARB_MSGVAL;
+    }
+
+    maskReg |= (flags & CAN_MSG_OBJ_USE_EXT_FILTER);//使用扩展ID掩码
+
+    maskReg |= (flags & CAN_MSG_OBJ_USE_DIR_FILTER);//使用方向掩码
+
+	//其他过滤器设置
+    if(((flags & CAN_MSG_OBJ_USE_ID_FILTER) |
+        (flags & CAN_MSG_OBJ_USE_DIR_FILTER) |
+        (flags & CAN_MSG_OBJ_USE_EXT_FILTER)) != 0U)
+    {
+        msgCtrl |= CAN_IF1MCTL_UMASK;
+    }
+
+	//配置消息长度，只对发送对象有效
+    if((msgType == CAN_MSG_OBJ_TYPE_TX) ||
+        (msgType == CAN_MSG_OBJ_TYPE_RXTX_REMOTE))
+    {
+        msgCtrl |= ((uint32_t)msgLen & CAN_IF1MCTL_DLC_M);
+    }
+
+    //
+    // If this is a single transfer or the last mailbox of a FIFO, set EOB bit.
+    // If this is not the last entry in a FIFO, leave the EOB bit as 0.
+    //
+    if((flags & CAN_MSG_OBJ_FIFO) == 0U)
+    {
+        msgCtrl |= CAN_IF1MCTL_EOB;
+    }
+
+    msgCtrl |= (flags & CAN_MSG_OBJ_TX_INT_ENABLE);//发送中断使能
+
+    msgCtrl |= (flags & CAN_MSG_OBJ_RX_INT_ENABLE);//接收中断使能
+
+    cmdMaskReg |= CAN_IF1CMD_ARB;//访问消息RAM中消息对象的ARB位域
+    cmdMaskReg |= CAN_IF1CMD_CONTROL;//访问消息对象的control位域
+    cmdMaskReg |= CAN_IF1CMD_MASK;//访问消息对象的掩码位域
+    cmdMaskReg |= CAN_IF1CMD_DIR;//设置访问为写访问，IFx接口寄存器组内容会被写入消息对象
+
+    HWREG_BP(base + CAN_O_IF1MSK) = maskReg;//配置掩码数据到IF1MSK寄存器
+    HWREG_BP(base + CAN_O_IF1ARB) = arbReg;//配置仲裁ID数据到IF1ARB寄存器
+    HWREG_BP(base + CAN_O_IF1MCTL) = msgCtrl;//配置消息控制信息到IF1MCTL寄存器
+
+    //
+    // Transfer data to message object RAM
+    //
+    HWREG_BP(base + CAN_O_IF1CMD) =
+    cmdMaskReg | (objID & CAN_IF1CMD_MSG_NUM_M);//配置命令，将消息对象为objID的对象更新上述内容
+}
+```
+
+## CAN中断配置
+
+​	CAN控制器包括的中断有：消息对象中断、错误和状态变更中断、CAN外设全局中断。
+
+### 消息对象中断
+
+​	消息对象的中断则为接收中断与发送中断，该配置在消息对象配置时完成，相应中断置位后，如果完成相关操作便会置位IntPnd。每个消息对象的IntPnd位都会路由到相应的中断寄存器CAN_INT中。
+
+### 错误和状态变更中断
+
+​	该中断属于CAN控制内部中断，如果相应的中断使能，那么可以在错误和状态变更寄存器CAN_ES中查看中断是何种中断。CAN内部中断由函数CAN_enableInterrupt()函数使能，其内部是对CAN控制寄存CAN_CTL中的相关位进行配置。
+
+```c
+static inline void CAN_enableInterrupt(uint32_t base, uint32_t intFlags)
+{
+    ASSERT(CAN_isBaseValid(base));
+    ASSERT((intFlags & ~(CAN_INT_ERROR | CAN_INT_STATUS | CAN_INT_IE0 |
+                         CAN_INT_IE1)) == 0U);
+
+    HWREG_BP(base + CAN_O_CTL) |= intFlags;
+}
+```
+
+### CAN全局中断
+
+​	CAN外设中断也可以视作CPU的CAN全局中断。其中断线有两条分别是CANINT0、和CANINT1。其通过调用CAN_enableGlobalInterrupt()函数实现中断使能。本质是对CAN全局中断使能寄存器CAN_GLB_INT_EN的配置。通过此配置后CAN控制的消息对象中断、错误中断和状态变更中断才会路由到两个中断线。
+
+```c
+static inline void CAN_enableGlobalInterrupt(uint32_t base, uint16_t intFlags)
+{
+    ASSERT(CAN_isBaseValid(base));
+    ASSERT((intFlags & ~(CAN_GLOBAL_INT_CANINT0 |
+                         CAN_GLOBAL_INT_CANINT1)) == 0U);
+
+    HWREGH(base + CAN_O_GLB_INT_EN) |= intFlags;
+}
+```
+
+​	对于全局中断的配置还需要使能到CPU，这一个过程就需要引入PIE外设中断扩展的电路功能。其相当于ST控制器内部的NVIC，负责外设中断到CPU之间的路由。其初始化以及使能过程如下：
+
+```c
+void CAN_Init(void) {
+  // Initialize PIE and clear PIE registers. Disables CPU interrupts.
+  Interrupt_initModule();
+
+  // Initialize the PIE vector table with pointers to the shell Interrupt
+  // Service Routines (ISR).
+  Interrupt_initVectorTable();
+
+  // Enable Global Interrupt (INTM) and realtime interrupt (DBGM)
+  EINT;
+  ERTM;
+}
+```
+
+​	首先初始化PIE，然后初始化PIE向量表，其内部包含相关外设的ISR入口地址。然后使能全局中断，使能调试中断。
+
+CAN相关的全部中断都可以在CAN_INT中断寄存器查看。
+
+![image-20250828172035870](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250828172035870.png)
+
+* INT1ID位域：只能用于指示被配置到CANINT1中断线上的消息对象中断，当该位域为0x00时，表明INT1无中断；当为0x1-0x20时，则分别对应挂起中断的消息对象序号，其他值无效。
+
+> 注：将消息对象分配到CANINT1线上需要配置CAN_IP_MUX寄存器中相应的位，每一位对应每一个消息对，该位置1则表示中断路由到CANINT1线上，为0则路由到CANINT0线。
+
+* INT0ID位域：用于表示CANINT0线上的消息对象中断，CAN错误中断和状态变更中断都只能路由到CANINT0线。当该位域为0x8000时，表示CAN_ES中的值发送改变，可以获取CAN_ES的值判断是何种中断。上述中断具有最高优先级。其他功能与INT1ID位域一致。
+
+## CAN 中断服务函数ISR配置 
+
+​	首先需要声明中断服务函数的函数原型，其中函数名称可以任取，__interrup关键字必须有。
+
+```c
+__interrupt void canaISR(void);//CANA中断服务函数
+```
+
+​	然后注册声明的函数原型到PIE的向量表中，由函数Interrupt_register()函数完成。
+
+```c
+static inline void Interrupt_register(uint32_t interruptNumber, void (*handler)(void))
+{
+    uint32_t address;
+	//根据中断号计算其在向量表中的位置
+    address = (uint32_t)PIEVECTTABLE_BASE +
+              (((interruptNumber & 0xFFFF0000U) >> 16U) * 2U);
+    
+    EALLOW;//宏函数，使能对保护寄存器的写访问
+    HWREG(address) = (uint32_t)handler;//将注册的中断函数地址写入向量表中
+    EDIS;//宏函数，失能对保护寄存器的写访问
+}
+```
+
+​	之后就是使能该中断号。
+
+```c
+void Interrupt_enable(uint32_t interruptNumber)
+{
+    bool intsDisabled;
+    uint16_t intGroup;
+    uint16_t groupMask;
+    uint16_t vectID;
+
+    vectID = (uint16_t)(interruptNumber >> 16U);//计算向量号ID
+	
+    //使能全局中断并保留状态
+    intsDisabled = Interrupt_disableGlobal();
+
+    //
+    // PIE Interrupts
+    //
+    if(vectID >= 0x20U)
+    {
+        intGroup = (uint16_t)(((interruptNumber & 0xFF00UL) >> 8U) - 1U);//计算向量组
+        groupMask = (uint16_t)1U << intGroup;
+
+        HWREGH((PIECTRL_BASE + PIE_O_IER1 + (intGroup * 2U))) |=
+            (uint16_t)1U << ((interruptNumber & 0xFFU) - 1U);
+
+        //
+        // Enable PIE Group Interrupt
+        //
+        IER |= groupMask;//失能PIE组中断
+    }
+
+    //
+    // INT13, INT14, DLOGINT, & RTOSINT
+    //
+    else if((vectID >= 0x0DU) && (vectID <= 0x10U))
+    {
+        IER |= (uint16_t)1U << (vectID - 1U);
+    }
+    else
+    {
+
+    }
+	
+    //使能被失能的中断
+    if(!intsDisabled)
+    {
+        (void)Interrupt_enableGlobal();
+    }
+}
+```
+
+​	最后便是编写中断服务函数ISR的具体实现流程。
+
+>注：对于中断，C2000不支持中断嵌套；所以每个中断都必须只进行必要的状态变更操作，严禁出现延迟等长时间等待操作。在中断与中断之外同时访问的变量，要注意边界保护，避免产生访问冲突。
+
+
+
+### 配置掩码Mask 
+
+​	掩码配置存储在掩码寄存器IFx_MSK中。如图
+
+![image-20250827152223625](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250827152223625.png)
+
+* MXtd位表示扩展位是否用于接收滤波。对于扩展帧掩码而言，Mxtd = ‘1’。
+* Msk位为1的bit表示，该位被用来做接收滤波，不匹配的ID不会被该消息对象接收。
+* MDir位表示Dir是否用于接收滤波，通常来说都该位为‘0’。
+
+​	对与一个ID为0x1801 D0EF的扩展帧，其32位表示如下。
+
+![image-20250827152622710](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250827152622710.png)
+
+​	对于发送对象而言，如果ID为0x1801D0EF，0x1803D0EF，0x1805D0EF……的发送消息，其可以通过给发送对象配置一个掩码9FF0 FFFF，而使得上述ID的消息可以共用相同的发送对象，减少消息对象的使用。
+
+![image-20250827153138127](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250827153138127.png)
+
+
+
+
+
+
+
+## 
+
+
+
+## CAN 应用层（测试用）
 
 
 
@@ -384,5 +865,10 @@
 
 
 
-# CAN 通信调试
+
+# CAN通信调试
+
+ ## 中断驱动通信
+
+ 	当开启状态与错误中断使能时，如果错误与状态（CAN_ES寄存器复位后为0x7）发生变更了(不为0x7)，最外部的中断寄存器CAN_INT会指向（此时值为0x8000）优先级最高的错误与状态变更寄存器CAN_ES。则由消息对象挂起的中断会被屏蔽掉。
 
