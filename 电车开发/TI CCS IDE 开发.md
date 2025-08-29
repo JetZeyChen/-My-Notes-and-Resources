@@ -2,17 +2,44 @@
 
 ## CCS 简介
 
-
+​	Code Composer Studio是支持C2000MCU和嵌入式处理器的集成开发环境IDE。其集成了一套嵌入式应用的开发和调试工具链。目前最新版本为20.2.0，其界面风格以及使用的软件架构都与Microsoft的Visual Stuidio Code一致。最新版对于适应VSCode的开发者来说相当友好。
 
 ## C2000 Ware
 
-
+​	该软件包是TI提供给C2000MCU开发使用的SDK，里面包括了一些工程模板跟示例，还有相关的库函数文件，还有系统配置工具SysconfigTool，可以以图形化方式快速配置初始外设相关的代码，其自动生成与ST的STM32CubeMX功能类似。
 
 ## CCS 新建工程流程
 
+​	打开CCS会自动弹出一个开始界面菜单，与VScode一致，可以在开始界面菜单中选择新建一个工程“Create a new project”。
 
+![image-20250829084925659](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829084925659.png)
 
+​	然后会跳转到Project Wizard界面，在该界面下可以选择新建工程的一些参数，如芯片型号，C2000Ware版本，编译器版本等。
 
+![image-20250829085516695](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829085516695.png)
+
+​	此时右下角的"CREATE"按键是不可响应的，我们还需要在Examples中选择新建的工程目标，其中一些示例工程包含一些以及配置好的功能，对于初学者来说比较友好，如果想新建一个完全空白的基础工程，可以划到最下面选择Universal C2000。然后点击创建就会在WORKSPACE_CCSTHEIA默认工作区下创建工程。
+
+![image-20250829090021551](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829090021551.png)
+
+## 工程配置
+
+​	右键工程名，选择最下方的”Properties“，就会弹出工程属性界面。
+
+![image-20250829090226121](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829090226121.png)
+
+* General：通用配置，在Connection中可以选择连接的仿真器型号；
+  * Dependencies：依赖的库文件，主要是C2000WARE的文件路径，以及SysconfigTool的路径。
+  * Variables：是一些工程定义的文件路径变量。
+* Build
+  * Steps：可以配置需要的构建步骤；
+  * Link Order：可以配置链接器的链接顺序优先级。
+* Tools
+  * Sysconfig：系统配置工具的属性；
+  * C2000 Compiler：可以配置编译器相关的属性，比如：编译器优化，预定义符合，头文件路径等等；
+  * C2000 Linker：配置链接器相关属性。
+
+​	主要的一些配置已经介绍完毕，其余的可以自行探索。
 
 # XDS100V3 Emulator
 
