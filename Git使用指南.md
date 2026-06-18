@@ -565,7 +565,11 @@ git push -u origin --all
 git push -u origin --tags
 ```
 
-上传成功之后，刷新 GitLab 界面即可看到上传的项目文件。
+上传的过程中会弹出对应的凭证权限管理窗口，需要输入对应的账号以及密码获取 Git 仓库链接的访问权限，如下图所示。
+
+<img src="C:/Users/10637/AppData/Roaming/Typora/typora-user-images/image-20260522083400412.png" alt="image-20260522083400412" style="zoom:67%;" />
+
+授权成功后，即可进行上传，成功之后，刷新 GitLab 界面即可看到上传的项目文件。
 
 ![image-20260517205058247](C:/Users/10637/AppData/Roaming/Typora/typora-user-images/image-20260517205058247.png)
 

@@ -2,34 +2,106 @@
 
 ## CCS 简介
 
-​	Code Composer Studio是支持C2000MCU和嵌入式处理器的集成开发环境IDE。其集成了一套嵌入式应用的开发和调试工具链。目前最新版本为20.2.0，其界面风格以及使用的软件架构都与Microsoft的Visual Stuidio Code一致。最新版对于适应VSCode的开发者来说相当友好。
+​	Code Composer Studio 是支持 C2000MCU 和嵌入式处理器的集成开发环境 IDE。其集成了一套嵌入式应用的开发和调试工具链。目前最新版本为 20.2.0，其界面风格以及使用的软件架构都与 Microsoft 的 Visual Stuidio Code一致。最新版对于适应 VSCode 的开发者来说相当友好。
 
 ## C2000 Ware
 
-​	该软件包是TI提供给C2000MCU开发使用的SDK，里面包括了一些工程模板跟示例，还有相关的库函数文件，还有系统配置工具SysconfigTool，可以以图形化方式快速配置初始外设相关的代码，其自动生成与ST的STM32CubeMX功能类似。
+​	该软件包是 TI 提供给 C2000MCU 开发使用的 SDK ，里面包括了一些工程模板跟示例，还有相关的库函数文件，还有系统配置工具 SysconfigTool，可以以图形化方式快速配置初始外设相关的代码，其自动生成与 ST 的 STM32CubeMX 功能类似。
 
 ## CCS 新建工程流程
 
-​	打开CCS会自动弹出一个开始界面菜单，与VScode一致，可以在开始界面菜单中选择新建一个工程“Create a new project”。
+​	打开 CCS 会自动弹出一个开始界面菜单，与 VScode 一致，可以在开始界面菜单中选择新建一个工程“Create a new project”。
 
 ![image-20250829084925659](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829084925659.png)
 
-​	然后会跳转到Project Wizard界面，在该界面下可以选择新建工程的一些参数，如芯片型号，C2000Ware版本，编译器版本等。
+​	然后会跳转到 Project Wizard 界面，在该界面下可以选择新建工程的一些参数，如芯片型号，C2000Ware 版本，编译器版本等。
 
 ![image-20250829085516695](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829085516695.png)
 
-​	此时右下角的"CREATE"按键是不可响应的，我们还需要在Examples中选择新建的工程目标，其中一些示例工程包含一些以及配置好的功能，对于初学者来说比较友好，如果想新建一个完全空白的基础工程，可以划到最下面选择Universal C2000。然后点击创建就会在WORKSPACE_CCSTHEIA默认工作区下创建工程。
+​	此时右下角的 "CREATE" 按键是不可响应的，我们还需要在 Examples 中选择新建的工程目标，其中一些示例工程包含一些以及配置好的功能，对于初学者来说比较友好，如果想新建一个完全空白的基础工程，可以划到最下面选择 Universal C2000。然后点击创建就会在 WORKSPACE_CCSTHEIA 默认工作区下创建工程。
 
 ![image-20250829090021551](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829090021551.png)
+
+## 导入现有工程
+
+​	点击左上角的 ‘File’ –> ‘Import Projects…’ 打开导入工程界面，如下图所示。
+
+<img src="C:/Users/10637/AppData/Roaming/Typora/typora-user-images/image-20260618155023115.png" alt="image-20260618155023115" style="zoom:80%;" />
+
+​	然后点击 ‘Browe…’ 打开工程所在文件夹/目录，如果检索到工程则会显示，通常导入工程时选择在工程原地址导入。
+
+<img src="C:/Users/10637/AppData/Roaming/Typora/typora-user-images/image-20260618155510067.png" alt="image-20260618155510067" style="zoom: 67%;" />
+
+### CCS 工程三大文件
+
+* **.project 工程描述文件** – 导入工程时最先识别的就是该文件；
+
+```yaml
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>EVS_2800157_APP_YFHJ_S4_10101_10101A0_V1.xx</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.ScannerConfigBuilder</name>
+			<triggers>full,incremental,</triggers>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>com.ti.ccstudio.core.ccsNature</nature>
+		<nature>org.eclipse.cdt.core.cnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
+		<nature>org.eclipse.cdt.core.ccnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
+	</natures>
+</projectDescription>
+```
+
+* **.ccsproject CCS工程描述文件** – 描述的是使用的 CCS IDE 相关的如版本，设备等；
+
+```yaml
+<?xml version="1.0" encoding="UTF-8" ?>
+<?ccsproject version="1.0"?>
+<projectOptions>
+	<ccsVersion value="11.0.0"/>
+	<deviceVariant value="TMS320C28XX.TMS320F2800157"/>
+	<deviceFamily value="C2000"/>
+	<deviceEndianness value="little"/>
+	<codegenToolVersion value="20.2.5.LTS"/>
+	<isElfFormat value="false"/>
+	<connection value="common/targetdb/connections/TIXDS100v3_Dot7_Connection.xml"/>
+	<rts value="rts2800_fpu32.lib"/>
+	<createSlaveProjects value=""/>
+	<templateProperties value="id=com.ti.common.project.core.emptyProjectTemplate"/>
+	<filesToOpen value=""/>
+	<isTargetManual value="true"/>
+	<sourceLookupPath value=""/>
+</projectOptions>
+```
+
+* **.cproject 编译器，链接等工具描述文件** – 导入工程后如果发现没有 Build 功能以及工程 Properties 选项，则是缺失该文件。
+
+> 由于该文件内容庞大，就不在此列出了。
 
 ## 工程配置
 
 ​	右键工程名，选择最下方的”Properties“，就会弹出工程属性界面。
 
-![image-20250829090226121](C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829090226121.png)
+<img src="C:/Users/10637/AppData/Roaming/Typora/typora-user-images/image-20260618160904661.png" alt="image-20260618160904661" style="zoom:80%;" />
 
-* General：通用配置，在Connection中可以选择连接的仿真器型号；
-  * Dependencies：依赖的库文件，主要是C2000WARE的文件路径，以及SysconfigTool的路径。
+<img src="C:\Users\10637\AppData\Roaming\Typora\typora-user-images\image-20250829090226121.png" alt="image-20250829090226121" style="zoom:80%;" />
+
+* General：通用配置，在 Connection 中可以选择连接的仿真器型号；
+  * Dependencies：依赖的库文件，主要是 C2000WARE 的文件路径，以及 SysconfigTool 的路径。
   * Variables：是一些工程定义的文件路径变量。
 * Build
   * Steps：可以配置需要的构建步骤；
